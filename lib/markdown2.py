@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #!/usr/bin/env python
 # Copyright (c) 2012 Trent Mick.
 # Copyright (c) 2007-2008 ActiveState Corp.
@@ -893,6 +894,9 @@ class Markdown(object):
 
         if "link-patterns" in self.extras:
             text = self._do_link_patterns(text)
+
+        if "auto-all-links" in self.extras:
+            text = self._do_auto_all_links(text)
 
         text = self._encode_amps_and_angles(text)
 
@@ -1896,6 +1900,32 @@ class Markdown(object):
                 text = text[:start] + hash + text[end:]
         for hash, link in list(link_from_hash.items()):
             text = text.replace(hash, link)
+        return text
+
+    _do_auto_all_links_pattern = re.compile(r"""(href=(\"|\'))?(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))""")
+    def _do_auto_all_links(self, text):
+        replacements = []
+        for match in self._do_auto_all_links_pattern.finditer(text):
+            if not match.group(1) and match.group(3):
+                href = match.expand(r'\3')
+                replacements.append((match.span(), href))
+
+        link_from_hash = {}
+        for (start, end), href in reversed(replacements):
+            link_info = [
+                    (item.replace('"', '&quot;')  # b/c of attr quote
+                        # To avoid markdown <em> and <strong>:
+                        .replace('*', self._escape_table['*'])
+                        .replace('_', self._escape_table['_']))
+                    for item in (href, text[start:end])
+                ]
+            link = '<a href="%s">%s</a>' % (link_info[0], link_info[1])
+            hash = _hash_text(link)
+            link_from_hash[hash] = link
+            text = text[:start] + hash + text[end:]
+
+        for link_hash, link in list(link_from_hash.items()):
+            text = text.replace(link_hash, link)
         return text
 
     def _unescape_special_chars(self, text):
